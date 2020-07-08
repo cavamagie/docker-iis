@@ -1,28 +1,22 @@
-FROM microsoft/iis
+FROM jdk11-nanoserver-1809
 SHELL ["powershell"]
-WORKDIR c:\\demo2
-COPY php demo2
-RUN powershell -Command \
-wget http://windows.php.net/downloads/releases/php-7.1.1-Win32-VC14-x86.zip -OutFile c:\php.zip ; \
-Expand-Archive -Path c:\php.zip -DestinationPath c:\php ; 
-RUN powershell -Command \
-	Install-WindowsFeature NET-Framework-45-ASPNET ; \  
-    Install-WindowsFeature Web-Asp-Net45 ; \
-    Install-WindowsFeature Web-Mgmt-Service ; \
-    Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\WebManagement\Server -Name EnableRemoteManagement -Value 1 ;\
-    Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\WebManagement\Server -Name RequiresWindowsCredentials -Value 0 ;\
-    Set-Service -name WMSVC -StartupType Automatic ; \
-    dism /online /enable-feature /featurename:IIS-CGI ; \
-    Import-Module WebAdministration ; \
-	c:\windows\System32\InetSrv\AppCmd set config /section:system.webServer/fastCGI /+[fullPath='c:\php\php-cgi.exe'] ; \
-	c:\windows\System32\InetSrv\AppCmd set config /section:system.webServer/handlers /+[name='PHP-FastCGI',path='*.php',verb='*',modules='FastCgiModule',scriptProcessor='c:\php\php-cgi.exe',resourceType='Either'] ; \
-    NET USER username "P@ssword" /ADD ; \
-    NET LOCALGROUP "administrators" "username" /add ; \
-	Start-service WMSVC ; 
-	
-RUN Remove-WebSite -Name 'Default Web Site'  
-RUN New-Website -Name 'guidgenerator' -Port 80 \  
-    -PhysicalPath 'c:\Demo2' -ApplicationPool '.NET v4.5'
-ADD ServiceMonitor.exe /ServiceMonitor.exe
-EXPOSE 80 443 8172  
-ENTRYPOINT ["C:\\ServiceMonitor.exe", "w3svc"]
+
+# Note: Get MSBuild 12.
+RUN Invoke-WebRequest "https://download.microsoft.com/download/9/B/B/9BB1309E-1A8F-4A47-A6C5-ECF76672A3B3/BuildTools_Full.exe" -OutFile "$env:TEMP\BuildTools_Full.exe" -UseBasicParsing
+RUN &  "$env:TEMP\BuildTools_Full.exe" /Silent /Full
+# Todo: delete the BuildTools_Full.exe file in this layer
+
+# Note: Add .NET + ASP.NET
+RUN Install-WindowsFeature NET-Framework-45-ASPNET ; \
+    Install-WindowsFeature Web-Asp-Net45
+
+# Note: Add NuGet
+RUN Invoke-WebRequest "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile "C:\windows\nuget.exe" -UseBasicParsing
+WORKDIR "C:\Program Files (x86)\MSBuild\Microsoft\VisualStudio\v12.0"
+
+# Note: Install Web Targets
+RUN &  "C:\windows\nuget.exe" Install MSBuild.Microsoft.VisualStudio.Web.targets -Version 12.0.4
+RUN mv 'C:\Program Files (x86)\MSBuild\Microsoft\VisualStudio\v12.0\MSBuild.Microsoft.VisualStudio.Web.targets.12.0.4\tools\VSToolsPath\*' 'C:\Program Files (x86)\MSBuild\Microsoft\VisualStudio\v12.0\'
+# Note: Add Msbuild to path
+RUN setx PATH '%PATH%;C:\\Program Files (x86)\\MSBuild\\12.0\\Bin\\msbuild.exe'
+CMD ["C:\\Program Files (x86)\\MSBuild\\12.0\\Bin\\msbuild.exe"]
