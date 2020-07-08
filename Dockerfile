@@ -1,4 +1,4 @@
-FROM jdk11-nanoserver-1809
+FROM jenkins/agent:jdk8-windowsservercore-1809
 SHELL ["powershell"]
 
 # Note: Get MSBuild 12.
